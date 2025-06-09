@@ -125,3 +125,66 @@ void ATopDownShooterCharacter::MovementTick(float DeltaTime)
 		SetActorRotation(FQuat(FRotator(0.0f, FindRotatorResultYaw, 0.0f)));
 	}
 }
+
+void ATopDownShooterCharacter::CharacterUpdate()
+{
+	float ResSpeed = 600.0f;
+	switch (MovementState)
+	{
+	case EMovementState::Aim_State:
+		ResSpeed = MovementSpeedInfo.AimSpeed;
+		break;
+	case EMovementState::AimWalk_State:
+		ResSpeed = MovementSpeedInfo.AimSpeedWalk;
+		break;
+	case EMovementState::Run_State:
+		ResSpeed = MovementSpeedInfo.RunSpeed;
+		break;
+	case EMovementState::Walk_State:
+		ResSpeed = MovementSpeedInfo.WalkSpeed;
+		break;
+	case EMovementState::SprintRun_State:
+		ResSpeed = MovementSpeedInfo.SprintRunSpeedRun;
+		break;
+	default:
+		break;
+	}
+
+	GetCharacterMovement()->MaxWalkSpeed = ResSpeed;
+}
+
+void ATopDownShooterCharacter::ChangeMovementState()
+{
+	if (!WalkEnabled && !SprintRunEnabled && !AimEnabled)
+	{
+		MovementState = EMovementState::Run_State;
+	}
+	else
+	{
+		if (SprintRunEnabled)
+		{
+			WalkEnabled = false;
+			AimEnabled = false;
+			MovementState = EMovementState::SprintRun_State;
+		}
+		if (WalkEnabled && !SprintRunEnabled && AimEnabled)
+		{
+			MovementState = EMovementState::AimWalk_State;
+		}
+		else
+		{
+			if (WalkEnabled && !SprintRunEnabled && !AimEnabled)
+			{
+				MovementState = EMovementState::Walk_State;
+			}
+			else
+			{
+				if (!WalkEnabled && !SprintRunEnabled && AimEnabled)
+				{
+					MovementState = EMovementState::Aim_State;
+				}
+			}
+		}
+	}
+	CharacterUpdate();
+}

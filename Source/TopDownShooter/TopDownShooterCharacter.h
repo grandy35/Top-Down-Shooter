@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
+#include "Types.h"
 #include "TopDownShooterCharacter.generated.h"
 
 UCLASS(Blueprintable)
@@ -40,6 +41,17 @@ private:
 	class UDecalComponent* CursorToWorld;
 
 public:
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		EMovementState MovementState = EMovementState::Run_State;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		FCharacterSpeed MovementSpeedInfo;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		bool SprintRunEnabled = false;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		bool WalkEnabled = false;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		bool AimEnabled = false;
+
 	UFUNCTION()
 		void InputAxisX(float Value);
 	UFUNCTION()
@@ -50,5 +62,10 @@ public:
 
 	UFUNCTION()
 		void MovementTick(float DeltaTime);
+
+	UFUNCTION(BlueprintCallable)
+		void CharacterUpdate();
+	UFUNCTION(BlueprintCallable)
+		void ChangeMovementState();
 };
 

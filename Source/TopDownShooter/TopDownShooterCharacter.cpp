@@ -89,7 +89,26 @@ void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 			CursorToWorld->SetWorldRotation(CursorR);
 		}
 	}
+
 	MovementTick(DeltaSeconds);
+
+	if (!AimEnabled)
+	{
+		CompareVectors(this);
+	}
+
+	if (MovementState == EMovementState::SprintRun)
+	{
+		DecreaseStamina(DeltaSeconds);
+	}
+
+	if (!SprintRunEnabled)
+	{
+		IncreaseStamina(DeltaSeconds);
+	}
+
+	//FString temp = StaticEnum<EMovementState>()->GetEnumNameStringByValue((int64)MovementState);
+	//UE_LOG(LogTemp, Warning, TEXT("%s"), *temp);
 }
 
 void ATopDownShooterCharacter::SetupPlayerInputComponent(UInputComponent* NewInputComponent)
@@ -126,24 +145,25 @@ void ATopDownShooterCharacter::MovementTick(float DeltaTime)
 	}
 }
 
+
 void ATopDownShooterCharacter::CharacterUpdate()
 {
 	float ResSpeed = 600.0f;
 	switch (MovementState)
 	{
-	case EMovementState::Aim_State:
+	case EMovementState::Aim:
 		ResSpeed = MovementSpeedInfo.AimSpeed;
 		break;
-	case EMovementState::AimWalk_State:
+	case EMovementState::AimWalk:
 		ResSpeed = MovementSpeedInfo.AimSpeedWalk;
 		break;
-	case EMovementState::Run_State:
+	case EMovementState::Run:
 		ResSpeed = MovementSpeedInfo.RunSpeed;
 		break;
-	case EMovementState::Walk_State:
+	case EMovementState::Walk:
 		ResSpeed = MovementSpeedInfo.WalkSpeed;
 		break;
-	case EMovementState::SprintRun_State:
+	case EMovementState::SprintRun:
 		ResSpeed = MovementSpeedInfo.SprintRunSpeedRun;
 		break;
 	default:
@@ -155,36 +175,80 @@ void ATopDownShooterCharacter::CharacterUpdate()
 
 void ATopDownShooterCharacter::ChangeMovementState()
 {
-	if (!WalkEnabled && !SprintRunEnabled && !AimEnabled)
+	if (SprintRunEnabled)
 	{
-		MovementState = EMovementState::Run_State;
+		MovementState = EMovementState::SprintRun;
+	}
+	else if (WalkEnabled && AimEnabled)
+	{
+		MovementState = EMovementState::AimWalk;
+	}
+	else if (WalkEnabled)
+	{
+		MovementState = EMovementState::Walk;
+	}
+	else if (AimEnabled)
+	{
+		MovementState = EMovementState::Aim;
 	}
 	else
 	{
-		if (SprintRunEnabled)
+		MovementState = EMovementState::Run;
+	}
+
+	CharacterUpdate();
+}
+
+void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
+{
+	FullStamina += -ChangeStamina * DeltaSeconds;
+
+	if (FullStamina <= 0.0f)
+	{
+		FullStamina = 0.0f;
+		if (MovementState == EMovementState::SprintRun)
 		{
-			WalkEnabled = false;
-			AimEnabled = false;
-			MovementState = EMovementState::SprintRun_State;
-		}
-		if (WalkEnabled && !SprintRunEnabled && AimEnabled)
-		{
-			MovementState = EMovementState::AimWalk_State;
-		}
-		else
-		{
-			if (WalkEnabled && !SprintRunEnabled && !AimEnabled)
-			{
-				MovementState = EMovementState::Walk_State;
-			}
-			else
-			{
-				if (!WalkEnabled && !SprintRunEnabled && AimEnabled)
-				{
-					MovementState = EMovementState::Aim_State;
-				}
-			}
+			StopSprint();
 		}
 	}
-	CharacterUpdate();
+	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
+}
+
+void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
+{
+	FullStamina += ChangeStamina * DeltaSeconds;
+
+	if (FullStamina > 100.0f)
+	{
+		FullStamina = 100.0f;
+	}
+	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
+}
+
+void ATopDownShooterCharacter::StopSprint()
+{
+	SprintRunEnabled = false;
+	ChangeMovementState();
+}
+
+void ATopDownShooterCharacter::CompareVectors(AActor* Actor)
+{
+	if (!Actor) return;
+
+	FVector ForwardVector = Actor->GetActorForwardVector();
+	FVector VelocityVector = Actor->GetVelocity();
+
+	ForwardVector.Normalize();
+	VelocityVector.Normalize();
+
+	float DotProduct = FVector::DotProduct(ForwardVector, VelocityVector);
+	if (DotProduct > 0.7f && GetWorld()->GetFirstPlayerController()->IsInputKeyDown(EKeys::LeftShift))
+	{
+		SprintRunEnabled = true;
+		ChangeMovementState();
+	}
+	else
+	{
+		StopSprint();
+	}
 }

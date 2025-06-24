@@ -42,15 +42,18 @@ private:
 
 public:
 	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		EMovementState MovementState = EMovementState::Run_State;
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		FCharacterSpeed MovementSpeedInfo;
+		EMovementState MovementState = EMovementState::Run;
+	
 	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
 		bool SprintRunEnabled = false;
 	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
 		bool WalkEnabled = false;
 	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
 		bool AimEnabled = false;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		float ChangeStamina = 5.0f;
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		float FullStamina = 100.0f;
 
 	UFUNCTION()
 		void InputAxisX(float Value);
@@ -62,10 +65,21 @@ public:
 
 	UFUNCTION()
 		void MovementTick(float DeltaTime);
-
 	UFUNCTION(BlueprintCallable)
 		void CharacterUpdate();
 	UFUNCTION(BlueprintCallable)
 		void ChangeMovementState();
+	UFUNCTION(BlueprintCallable)
+		void DecreaseStamina(float DeltaSeconds);
+	UFUNCTION(BlueprintCallable)
+		void IncreaseStamina(float DeltaSeconds);
+	UFUNCTION(BlueprintCallable)
+		void StopSprint();
+	UFUNCTION(BlueprintCallable)
+		void CompareVectors(AActor* Actor);
+
+protected:
+	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
+		FCharacterSpeed MovementSpeedInfo;
 };
 

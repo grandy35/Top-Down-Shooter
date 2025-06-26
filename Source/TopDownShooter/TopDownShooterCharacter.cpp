@@ -92,10 +92,7 @@ void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 
 	MovementTick(DeltaSeconds);
 
-	if (!AimEnabled)
-	{
-		CompareVectors(this);
-	}
+	CompareVectors(this);
 
 	if (MovementState == EMovementState::SprintRun)
 	{
@@ -175,7 +172,7 @@ void ATopDownShooterCharacter::CharacterUpdate()
 
 void ATopDownShooterCharacter::ChangeMovementState()
 {
-	if (SprintRunEnabled)
+	if (SprintRunEnabled && !AimEnabled)
 	{
 		MovementState = EMovementState::SprintRun;
 	}

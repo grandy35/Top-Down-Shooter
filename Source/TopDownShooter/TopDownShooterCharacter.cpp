@@ -208,7 +208,7 @@ void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
 			StopSprint();
 		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
+	//UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
@@ -219,7 +219,7 @@ void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
 	{
 		FullStamina = 100.0f;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
+	//UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::StopSprint()

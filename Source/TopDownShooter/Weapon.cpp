@@ -40,6 +40,8 @@ AWeapon::AWeapon()
 	CurrentAmmo = 30;
 	MaxAmmo = 30;
 	LastFireTime = 0.0f;
+	bIsReloading = false;
+	ReloadTime = 1.5f;
 
 }
 
@@ -175,18 +177,40 @@ void AWeapon::Fire()
 
 void AWeapon::Reloading()
 {
-	if (CurrentAmmo < MaxAmmo)
+	// Проверяем, не идёт ли уже перезарядка
+	if (bIsReloading)
 	{
-		CurrentAmmo = MaxAmmo;
-		UE_LOG(LogTemp, Warning, TEXT("Reloaded! Ammo: %d"), CurrentAmmo);
-
-		// Здесь можно добавить звук перезарядки и анимацию
+		UE_LOG(LogTemp, Warning, TEXT("Already reloading!"));
+		return;
 	}
+
+	// Проверяем, есть ли смысл перезаряжаться
+	if (CurrentAmmo >= MaxAmmo)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Ammo is full!"));
+		return;
+	}
+
+	// Начинаем перезарядку
+	bIsReloading = true;
+	UE_LOG(LogTemp, Warning, TEXT("Reloading started..."));
+
+	FTimerHandle ReloadTimerHandle;
+	GetWorldTimerManager().SetTimer(
+		ReloadTimerHandle,
+		this,
+		&AWeapon::FinishReload,
+		ReloadTime,
+		false
+	);
+
+	PlayReloadSound();
+	// Здесь можно добавить звук перезарядки и анимацию
 }
 
 bool AWeapon::CanFire() const
 {
-	return CurrentAmmo > 0;
+	return CurrentAmmo > 0 && !bIsReloading;
 }
 
 // === ТРАССИРОВКА (LINE TRACE) ===
@@ -326,6 +350,26 @@ void AWeapon::PlayFireSound()
 			GetActorLocation()
 		);
 	}
+}
+
+void AWeapon::PlayReloadSound()
+{
+	if (ReloadSound)
+	{
+		UGameplayStatics::PlaySoundAtLocation(
+			GetWorld(),
+			ReloadSound,
+			GetActorLocation()
+		);
+	};
+}
+
+void AWeapon::FinishReload()
+{
+	CurrentAmmo = MaxAmmo;
+	bIsReloading = false;
+
+	UE_LOG(LogTemp, Warning, TEXT("Reload complete! Ammo: %d"), CurrentAmmo);
 }
 
 void AWeapon::ApplyRecoil()

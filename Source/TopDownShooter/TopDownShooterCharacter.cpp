@@ -13,6 +13,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
+#include "TDSGameInstance.h"
+#include "Weapon.h"
 
 ATopDownShooterCharacter::ATopDownShooterCharacter()
 {
@@ -59,6 +61,13 @@ ATopDownShooterCharacter::ATopDownShooterCharacter()
 	PrimaryActorTick.bStartWithTickEnabled = true;
 }
 
+void ATopDownShooterCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	InitWeapon(InitWeaponName);
+}
+
 void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -103,9 +112,6 @@ void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 	{
 		IncreaseStamina(DeltaSeconds);
 	}
-
-	//FString temp = StaticEnum<EMovementState>()->GetEnumNameStringByValue((int64)MovementState);
-	//UE_LOG(LogTemp, Warning, TEXT("%s"), *temp);
 }
 
 void ATopDownShooterCharacter::SetupPlayerInputComponent(UInputComponent* NewInputComponent)
@@ -194,6 +200,12 @@ void ATopDownShooterCharacter::ChangeMovementState()
 	}
 
 	CharacterUpdate();
+
+	AWeapon* myWeapon = GetCurrentWeapon();
+	if (myWeapon)
+	{
+		myWeapon->UpdateStateWeapon(MovementState);
+	}
 }
 
 void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
@@ -208,7 +220,6 @@ void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
 			StopSprint();
 		}
 	}
-	//UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
@@ -219,7 +230,6 @@ void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
 	{
 		FullStamina = 100.0f;
 	}
-	//UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::StopSprint()
@@ -248,4 +258,67 @@ void ATopDownShooterCharacter::CompareVectors(AActor* Actor)
 	{
 		StopSprint();
 	}
+}
+
+AWeapon* ATopDownShooterCharacter::GetCurrentWeapon()
+{
+	return CurrentWeapon;
+}
+
+void ATopDownShooterCharacter::InitWeapon(FName IdWeapon)
+{
+	UTDSGameInstance* MyGI = Cast<UTDSGameInstance>(GetGameInstance());
+
+	if (!MyGI)
+	{
+		//UE_LOG(LogTemp, Error, TEXT("GameInstance is NULL!"));
+		return;
+	}
+
+	FWeaponInfo MyWeaponInfo;
+
+	if (!MyGI->GetWeaponInfoByName(IdWeapon, MyWeaponInfo))
+	{
+		//UE_LOG(LogTemp, Error, TEXT("Weapon not found in table: %s"), *IdWeapon.ToString());
+		return;
+	}
+
+	if (!MyWeaponInfo.WeaponClass)
+	{
+		//UE_LOG(LogTemp, Error, TEXT("WeaponClass is NULL for: %s"), *IdWeapon.ToString());
+		return;
+	}
+
+	if (MyGI)
+	{
+		if (MyGI->GetWeaponInfoByName(IdWeapon, MyWeaponInfo))
+		{
+			if (MyWeaponInfo.WeaponClass)
+			{
+				FVector SpawnLocation = FVector::ZeroVector;
+				FRotator SpawnRotation = FRotator::ZeroRotator;
+
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				SpawnParams.Owner = this;
+				SpawnParams.Instigator = this;
+
+				AWeapon* MyWeapon = Cast<AWeapon>(GetWorld()->SpawnActor(MyWeaponInfo.WeaponClass, &SpawnLocation, &SpawnRotation, SpawnParams));
+				if (MyWeapon)
+				{
+					FAttachmentTransformRules Rule(EAttachmentRule::SnapToTarget, false);
+					MyWeapon->AttachToComponent(GetMesh(), Rule, FName("Weapon_Socket"));
+					CurrentWeapon = MyWeapon;
+
+					MyWeapon->WeaponSetting = MyWeaponInfo;
+					MyWeapon->WeaponInfo.Round = MyWeaponInfo.MaxRound;
+				}
+			}
+		}
+		else
+		{
+			//UE_LOG(LogTemp, Warning, TEXT("Weapon not found in table!!!"));
+		}
+	}
+
 }

@@ -39,8 +39,8 @@ void AProjectileDefault::BeginPlay()
 {
 	Super::BeginPlay();
 	
-    // Автоматическое уничтожение через 5 секунд
-    SetLifeSpan(5.0f);
+    // Автоматическое уничтожение через 10 секунд
+    SetLifeSpan(10.0f);
 }
 
 // Called every frame

@@ -2,15 +2,14 @@
 
 
 #include "Weapon.h"
-#include "Components/StaticMeshComponent.h"
-#include "Components/SceneComponent.h"
+#include "Kismet/KismetMathLibrary.h"
 #include "Kismet/GameplayStatics.h"
-#include "Particles/ParticleSystemComponent.h"
-#include "DrawDebugHelpers.h"
 #include "Engine/World.h"
 #include "ProjectileDefault.h"
-#include "GameFramework/ProjectileMovementComponent.h"
-#include "GameFramework/Character.h"
+#include "Types.h"
+#include "Particles/ParticleSystemComponent.h" 
+#include "TopDownShooterCharacter.h"
+
 
 using namespace std;
 
@@ -33,6 +32,11 @@ AWeapon::AWeapon()
 	MuzzleSocket = CreateDefaultSubobject<USceneComponent>(TEXT("MuzzleSocket"));
 	MuzzleSocket->SetupAttachment(WeaponMesh);
 	MuzzleSocket->SetRelativeLocation(FVector(50.0f, 0.0f, 0.0f)); // Сдвиг вперёд от центра меша
+
+	// Создаём сокет магазина
+	MagazineSocket = CreateDefaultSubobject<USceneComponent>(TEXT("MagazineSocket"));
+	MagazineSocket->SetupAttachment(WeaponMesh);
+	MagazineSocket->SetRelativeLocation(FVector(0, 0, 15));
 
 	Damage = 10.0f;
 	FireRate = 5.0f; // 5 выстрелов в секунду
@@ -57,6 +61,73 @@ void AWeapon::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+}
+
+void AWeapon::FireTick(float DeltaTime)
+{
+	if (GetWeaponRound() > 0)
+	{
+		if (WeaponFiring)
+			if (LastFireTime < 0.f)
+			{
+				if (!bIsReloading)
+					Fire();
+			}
+			else
+				LastFireTime -= DeltaTime;
+	}
+	else
+	{
+		if (!bIsReloading)
+		{
+			Reloading();
+		}
+	}
+}
+
+void AWeapon::ReloadTick(float DeltaTime)
+{
+	if (bIsReloading)
+	{
+		if (ReloadTime < 0.0f)
+		{
+			FinishReload();
+		}
+		else
+		{
+			ReloadTime -= DeltaTime;
+		}
+	}
+}
+
+void AWeapon::DispersionTick(float DeltaTime)
+{
+	if (!bIsReloading)
+	{
+		if (!WeaponFiring)
+		{
+			if (ShouldReduceDispersion)
+				CurrentDispersion = CurrentDispersion - CurrentDispersionReduction;
+			else
+				CurrentDispersion = CurrentDispersion + CurrentDispersionReduction;
+		}
+
+		if (CurrentDispersion < CurrentDispersionMin)
+		{
+
+			CurrentDispersion = CurrentDispersionMin;
+
+		}
+		else
+		{
+			if (CurrentDispersion > CurrentDispersionMax)
+			{
+				CurrentDispersion = CurrentDispersionMax;
+			}
+		}
+	}
+	if (ShowDebug)
+		UE_LOG(LogTemp, Warning, TEXT("Dispersion: MAX = %f. MIN = %f. Current = %f"), CurrentDispersionMax, CurrentDispersionMin, CurrentDispersion);
 }
 
 void AWeapon::Fire()
@@ -175,6 +246,124 @@ void AWeapon::Fire()
 	PlayFireSound();
 }
 
+void AWeapon::SetWeaponStateFire(bool bIsFire)
+{
+	if (CanFire())
+		WeaponFiring = bIsFire;
+	else
+		WeaponFiring = false;
+	LastFireTime = 0.01f;//!!!!!
+}
+
+void AWeapon::UpdateStateWeapon(EMovementState NewMovementState)
+{
+	//ToDo Dispersion
+	BlockFire = false;
+
+	switch (NewMovementState)
+	{
+	case EMovementState::Aim:
+
+		CurrentDispersionMax = WeaponSetting.DispersionWeapon.Aim_StateDispersionAimMax;
+		CurrentDispersionMin = WeaponSetting.DispersionWeapon.Aim_StateDispersionAimMin;
+		CurrentDispersionRecoil = WeaponSetting.DispersionWeapon.Aim_StateDispersionAimRecoil;
+		CurrentDispersionReduction = WeaponSetting.DispersionWeapon.Aim_StateDispersionReduction;
+		break;
+	case EMovementState::AimWalk:
+
+		CurrentDispersionMax = WeaponSetting.DispersionWeapon.AimWalk_StateDispersionAimMax;
+		CurrentDispersionMin = WeaponSetting.DispersionWeapon.AimWalk_StateDispersionAimMin;
+		CurrentDispersionRecoil = WeaponSetting.DispersionWeapon.AimWalk_StateDispersionAimRecoil;
+		CurrentDispersionReduction = WeaponSetting.DispersionWeapon.Aim_StateDispersionReduction;
+		break;
+	case EMovementState::Walk:
+
+		CurrentDispersionMax = WeaponSetting.DispersionWeapon.Walk_StateDispersionAimMax;
+		CurrentDispersionMin = WeaponSetting.DispersionWeapon.Walk_StateDispersionAimMin;
+		CurrentDispersionRecoil = WeaponSetting.DispersionWeapon.Walk_StateDispersionAimRecoil;
+		CurrentDispersionReduction = WeaponSetting.DispersionWeapon.Aim_StateDispersionReduction;
+		break;
+	case EMovementState::Run:
+
+		CurrentDispersionMax = WeaponSetting.DispersionWeapon.Run_StateDispersionAimMax;
+		CurrentDispersionMin = WeaponSetting.DispersionWeapon.Run_StateDispersionAimMin;
+		CurrentDispersionRecoil = WeaponSetting.DispersionWeapon.Run_StateDispersionAimRecoil;
+		CurrentDispersionReduction = WeaponSetting.DispersionWeapon.Aim_StateDispersionReduction;
+		break;
+	case EMovementState::SprintRun:
+		BlockFire = true;
+		SetWeaponStateFire(false);//set fire trigger to false
+		//Block Fire
+		break;
+	default:
+		break;
+	}
+}
+
+void AWeapon::ChangeDispersionByShot()
+{
+	CurrentDispersion = CurrentDispersion + CurrentDispersionRecoil;
+}
+
+float AWeapon::GetCurrentDispersion() const
+{
+	float Result = CurrentDispersion;
+	return Result;
+}
+
+FVector AWeapon::ApplyDispersionToShoot(FVector DirectionShoot) const
+{
+	return FMath::VRandCone(DirectionShoot, GetCurrentDispersion() * PI / 180.f);
+}
+
+FVector AWeapon::GetFireEndLocation() const
+{
+	bool bShootDirection = false;
+	FVector EndLocation = FVector(0.f);
+
+	FVector tmpV = (ShootLocation->GetComponentLocation() - ShootEndLocation);
+	//UE_LOG(LogTemp, Warning, TEXT("Vector: X = %f. Y = %f. Size = %f"), tmpV.X, tmpV.Y, tmpV.Size());
+
+	if (tmpV.Size() > SizeVectorToChangeShootDirectionLogic)
+	{
+		EndLocation = ShootLocation->GetComponentLocation() + ApplyDispersionToShoot((ShootLocation->GetComponentLocation() - ShootEndLocation).GetSafeNormal()) * -20000.0f;
+		if (ShowDebug)
+			DrawDebugCone(GetWorld(), ShootLocation->GetComponentLocation(), -(ShootLocation->GetComponentLocation() - ShootEndLocation), WeaponSetting.DistanceTrace, GetCurrentDispersion() * PI / 180.f, GetCurrentDispersion() * PI / 180.f, 32, FColor::Emerald, false, .1f, (uint8)'\000', 1.0f);
+	}
+	else
+	{
+		EndLocation = ShootLocation->GetComponentLocation() + ApplyDispersionToShoot(ShootLocation->GetForwardVector()) * 20000.0f;
+		if (ShowDebug)
+			DrawDebugCone(GetWorld(), ShootLocation->GetComponentLocation(), ShootLocation->GetForwardVector(), WeaponSetting.DistanceTrace, GetCurrentDispersion() * PI / 180.f, GetCurrentDispersion() * PI / 180.f, 32, FColor::Emerald, false, .1f, (uint8)'\000', 1.0f);
+	}
+
+
+	if (ShowDebug)
+	{
+		//direction weapon look
+		DrawDebugLine(GetWorld(), ShootLocation->GetComponentLocation(), ShootLocation->GetComponentLocation() + ShootLocation->GetForwardVector() * 500.0f, FColor::Cyan, false, 5.f, (uint8)'\000', 0.5f);
+		//direction projectile must fly
+		DrawDebugLine(GetWorld(), ShootLocation->GetComponentLocation(), ShootEndLocation, FColor::Red, false, 5.f, (uint8)'\000', 0.5f);
+		//Direction Projectile Current fly
+		DrawDebugLine(GetWorld(), ShootLocation->GetComponentLocation(), EndLocation, FColor::Black, false, 5.f, (uint8)'\000', 0.5f);
+
+		//DrawDebugSphere(GetWorld(), ShootLocation->GetComponentLocation() + ShootLocation->GetForwardVector()*SizeVectorToChangeShootDirectionLogic, 10.f, 8, FColor::Red, false, 4.0f);
+	}
+
+
+	return EndLocation;
+}
+
+int8 AWeapon::GetNumberProjectileByShot() const
+{
+	return WeaponSetting.NumberProjectileByShot;
+}
+
+int32 AWeapon::GetWeaponRound()
+{
+	return WeaponInfo.Round;
+}
+
 void AWeapon::Reloading()
 {
 	// Проверяем, не идёт ли уже перезарядка
@@ -194,7 +383,7 @@ void AWeapon::Reloading()
 	// Начинаем перезарядку
 	bIsReloading = true;
 	UE_LOG(LogTemp, Warning, TEXT("Reloading started..."));
-
+	
 	FTimerHandle ReloadTimerHandle;
 	GetWorldTimerManager().SetTimer(
 		ReloadTimerHandle,

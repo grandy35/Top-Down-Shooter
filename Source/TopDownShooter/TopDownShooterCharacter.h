@@ -16,6 +16,8 @@ public:
 	ATopDownShooterCharacter();
 
 	// Called every frame.
+	virtual void BeginPlay() override;
+
 	virtual void Tick(float DeltaSeconds) override;
 
 	virtual void SetupPlayerInputComponent(class UInputComponent* InputComponent) override;
@@ -41,45 +43,55 @@ private:
 	class UDecalComponent* CursorToWorld;
 
 public:
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		EMovementState MovementState = EMovementState::Run;
-	
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		bool SprintRunEnabled = false;
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		bool WalkEnabled = false;
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		bool AimEnabled = false;
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		float ChangeStamina = 5.0f;
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		float FullStamina = 100.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	EMovementState MovementState = EMovementState::Run;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool SprintRunEnabled = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool WalkEnabled = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	bool AimEnabled = false;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float ChangeStamina = 5.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	float FullStamina = 100.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Demo")
+	FName InitWeaponName;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
+	AWeapon* CurrentWeapon = nullptr;
 
 	UFUNCTION()
-		void InputAxisX(float Value);
+	void InputAxisX(float Value);
 	UFUNCTION()
-		void InputAxisY(float Value);
+	void InputAxisY(float Value);
 
 	float AxisX = 0.0f;
 	float AxisY = 0.0f;
 
 	UFUNCTION()
-		void MovementTick(float DeltaTime);
+	void MovementTick(float DeltaTime);
 	UFUNCTION(BlueprintCallable)
-		void CharacterUpdate();
+	void CharacterUpdate();
 	UFUNCTION(BlueprintCallable)
-		void ChangeMovementState();
+	void ChangeMovementState();
 	UFUNCTION(BlueprintCallable)
-		void DecreaseStamina(float DeltaSeconds);
+	void DecreaseStamina(float DeltaSeconds);
 	UFUNCTION(BlueprintCallable)
-		void IncreaseStamina(float DeltaSeconds);
+	void IncreaseStamina(float DeltaSeconds);
 	UFUNCTION(BlueprintCallable)
-		void StopSprint();
+	void StopSprint();
 	UFUNCTION(BlueprintCallable)
-		void CompareVectors(AActor* Actor);
+	void CompareVectors(AActor* Actor);
+	UFUNCTION(BlueprintCallable)
+	void InitWeapon(FName IdWeapon);
+	UFUNCTION(BlueprintCallable)
+	AWeapon* GetCurrentWeapon();
+
 
 protected:
-	UPROPERTY(EditAnyWhere, BlueprintReadWrite, Category = "Movement")
-		FCharacterSpeed MovementSpeedInfo;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")
+	FCharacterSpeed MovementSpeedInfo;
 };
 

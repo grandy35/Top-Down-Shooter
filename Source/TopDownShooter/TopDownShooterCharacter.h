@@ -88,7 +88,8 @@ public:
 	void InitWeapon(FName IdWeapon);
 	UFUNCTION(BlueprintCallable)
 	AWeapon* GetCurrentWeapon();
-
+	UFUNCTION(BlueprintCallable)
+	void AttackCharEvent(bool bIsFiring);
 
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Movement")

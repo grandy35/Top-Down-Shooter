@@ -54,9 +54,9 @@ struct FProjectileInfo
 	float ProjectileDamage = 20.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ProjectileSetting")
-	float ProjectileLifeTime = 20.0f;
+	float ProjectileLifeTime = 10.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ProjectileSetting")
-	float ProjectileInitSpeed = 200.0f;
+	float ProjectileInitSpeed = 5000.0f;
 
 	//material to decal on hit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "ProjectileSetting")

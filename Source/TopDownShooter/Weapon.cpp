@@ -23,6 +23,11 @@ AWeapon::AWeapon()
 	RootScene = CreateDefaultSubobject<USceneComponent>(TEXT("RootScene"));
 	RootComponent = RootScene;
 
+	SkeletalMeshWeapon = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("Skeletal Mesh"));
+	SkeletalMeshWeapon->SetGenerateOverlapEvents(false);
+	SkeletalMeshWeapon->SetCollisionProfileName(TEXT("NoCollision"));
+	SkeletalMeshWeapon->SetupAttachment(RootComponent);
+
 	// Создаём меш оружия
 	WeaponMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("WeaponMesh"));
 	WeaponMesh->SetupAttachment(RootScene);
@@ -60,7 +65,9 @@ void AWeapon::BeginPlay()
 void AWeapon::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	FireTick(DeltaTime);
+	ReloadTick(DeltaTime);
+	DispersionTick(DeltaTime);
 }
 
 void AWeapon::FireTick(float DeltaTime)
@@ -220,7 +227,18 @@ void AWeapon::Fire()
 
 	if (BulletActor)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("✓ BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
+		UE_LOG(LogTemp, Warning, TEXT(" BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
+
+		// === ПЕРЕДАЁМ УРОН ИЗ ОРУЖИЯ В ПУЛЮ ===
+		AProjectileDefault* Bullet = Cast<AProjectileDefault>(BulletActor);
+		if (Bullet)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("=== FIRE DAMAGE DEBUG ==="));
+			UE_LOG(LogTemp, Warning, TEXT("Weapon Damage (this): %f"), Damage);
+			UE_LOG(LogTemp, Warning, TEXT("Setting bullet damage to: %f"), Damage);
+			Bullet->SetProjectileInfo(WeaponSetting.ProjectileSetting);
+			UE_LOG(LogTemp, Warning, TEXT("Bullet damage after set: %f"), Bullet->GetDamage());
+		}
 
 		// Пытаемся получить компонент движения
 		UProjectileMovementComponent* Movement =
@@ -242,9 +260,28 @@ void AWeapon::Fire()
 	}
 
 	// Эффекты
-	SpawnMuzzleFlash();
-	PlayFireSound();
+	if (BulletActor)
+	{
+		SpawnMuzzleFlash();
+		PlayFireSound();
+	}
 }
+
+void AWeapon::WeaponInit()
+{
+	if (SkeletalMeshWeapon && !SkeletalMeshWeapon->SkeletalMesh)
+	{
+		SkeletalMeshWeapon->DestroyComponent(true);
+	}
+
+	if (WeaponMesh && !WeaponMesh->GetStaticMesh())
+	{
+		WeaponMesh->DestroyComponent();
+	}
+
+	UpdateStateWeapon(EMovementState::Run);
+}
+
 
 void AWeapon::SetWeaponStateFire(bool bIsFire)
 {
@@ -347,7 +384,7 @@ FVector AWeapon::GetFireEndLocation() const
 		//Direction Projectile Current fly
 		DrawDebugLine(GetWorld(), ShootLocation->GetComponentLocation(), EndLocation, FColor::Black, false, 5.f, (uint8)'\000', 0.5f);
 
-		//DrawDebugSphere(GetWorld(), ShootLocation->GetComponentLocation() + ShootLocation->GetForwardVector()*SizeVectorToChangeShootDirectionLogic, 10.f, 8, FColor::Red, false, 4.0f);
+		//DrawDebugSphere(GetWorld(), ShootLocation->GetComponentLocation() + ShootLocation->GetForwardVector() * SizeVectorToChangeShootDirectionLogic, 10.f, 8, FColor::Red, false, 4.0f);
 	}
 
 
@@ -383,7 +420,7 @@ void AWeapon::Reloading()
 	// Начинаем перезарядку
 	bIsReloading = true;
 	UE_LOG(LogTemp, Warning, TEXT("Reloading started..."));
-	
+
 	FTimerHandle ReloadTimerHandle;
 	GetWorldTimerManager().SetTimer(
 		ReloadTimerHandle,

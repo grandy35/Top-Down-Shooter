@@ -54,9 +54,23 @@ public:
 
 	FProjectileInfo GetProjectile();
 
+	// Таблица настроек пули (связана с оружием)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	class UDataTable* ProjectileDataTable;
+
+	// Имя строки в таблице (какую пулю использовать)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Projectile")
+	FName ProjectileRowName;
+
+	// Кэшированные настройки пули
+	FProjectileInfo ProjectileSetting;
+
 	// Корневой компонент
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
 	USceneComponent* RootScene;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = Components)
+	class USkeletalMeshComponent* SkeletalMeshWeapon = nullptr;
 
 	// Меш оружия (точка, откуда летит пуля)
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -81,7 +95,7 @@ public:
 	// === НАСТРОЙКИ ОРУЖИЯ ===
 
 	// Урон оружия
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Weapon")
 	float Damage;
 	// Скорострельность (выстрелов в секунду)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")

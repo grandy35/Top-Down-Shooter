@@ -148,6 +148,18 @@ void ATopDownShooterCharacter::MovementTick(float DeltaTime)
 	}
 }
 
+void ATopDownShooterCharacter::AttackCharEvent(bool bIsFiring)
+{
+	AWeapon* myWeapon = nullptr;
+	myWeapon = GetCurrentWeapon();
+	if (myWeapon)
+	{
+		//ToDo Check melee or range
+		myWeapon->SetWeaponStateFire(bIsFiring);
+	}
+	else
+		UE_LOG(LogTemp, Warning, TEXT("ATPSCharacter::AttackCharEvent - CurrentWeapon -NULL"));
+}
 
 void ATopDownShooterCharacter::CharacterUpdate()
 {
@@ -178,33 +190,43 @@ void ATopDownShooterCharacter::CharacterUpdate()
 
 void ATopDownShooterCharacter::ChangeMovementState()
 {
-	if (SprintRunEnabled && !AimEnabled)
-	{
-		MovementState = EMovementState::SprintRun;
-	}
-	else if (WalkEnabled && AimEnabled)
-	{
-		MovementState = EMovementState::AimWalk;
-	}
-	else if (WalkEnabled)
-	{
-		MovementState = EMovementState::Walk;
-	}
-	else if (AimEnabled)
-	{
-		MovementState = EMovementState::Aim;
-	}
-	else
+	if (!WalkEnabled && !SprintRunEnabled && !AimEnabled)
 	{
 		MovementState = EMovementState::Run;
 	}
-
+	else
+	{
+		if (SprintRunEnabled)
+		{
+			WalkEnabled = false;
+			AimEnabled = false;
+			MovementState = EMovementState::SprintRun;
+		}
+		if (WalkEnabled && !SprintRunEnabled && AimEnabled)
+		{
+			MovementState = EMovementState::AimWalk;
+		}
+		else
+		{
+			if (WalkEnabled && !SprintRunEnabled && !AimEnabled)
+			{
+				MovementState = EMovementState::Walk;
+			}
+			else
+			{
+				if (!WalkEnabled && !SprintRunEnabled && AimEnabled)
+				{
+					MovementState = EMovementState::Aim;
+				}
+			}
+		}
+	}
 	CharacterUpdate();
 
-	AWeapon* myWeapon = GetCurrentWeapon();
-	if (myWeapon)
+	AWeapon* MyWeapon = GetCurrentWeapon();
+	if (MyWeapon)
 	{
-		myWeapon->UpdateStateWeapon(MovementState);
+		MyWeapon->UpdateStateWeapon(MovementState);
 	}
 }
 
@@ -312,6 +334,10 @@ void ATopDownShooterCharacter::InitWeapon(FName IdWeapon)
 
 					MyWeapon->WeaponSetting = MyWeaponInfo;
 					MyWeapon->WeaponInfo.Round = MyWeaponInfo.MaxRound;
+					MyWeapon->Damage = MyWeaponInfo.WeaponDamage;
+					UE_LOG(LogTemp, Warning, TEXT("=== INIT WEAPON ==="));
+					UE_LOG(LogTemp, Warning, TEXT("WeaponDamage from DataTable: %f"), MyWeaponInfo.WeaponDamage);
+					UE_LOG(LogTemp, Warning, TEXT("Weapon Damage after set: %f"), MyWeapon->Damage);
 				}
 			}
 		}

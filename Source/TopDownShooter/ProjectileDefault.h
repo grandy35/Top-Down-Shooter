@@ -4,6 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Particles/ParticleSystemComponent.h"
+#include "Types.h"
+
 #include "ProjectileDefault.generated.h"
 
 class UStaticMeshComponent;
@@ -35,8 +38,44 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Damage")
 	float Damage;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, meta = (AllowPrivateAccess = "true"), Category = Components)
+	class UParticleSystemComponent* BulletFX = nullptr;
+
+	// Материал декали для следов от пуль
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	UMaterialInterface* BulletDecalMaterial;
+
+	// Размер декали
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	FVector DecalSize = FVector(10.0f, 10.0f, 10.0f);
+
+	// Время жизни декали (0 = навсегда)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Effects")
+	float DecalLifeSpan = 10.0f;
+
+
 	UFUNCTION()
 	void OnHit(UPrimitiveComponent* HitComp, AActor* OtherActor,
 		UPrimitiveComponent* OtherComp, FVector NormalImpulse,
 		const FHitResult& Hit);
+
+	// Функция установки урона из оружия
+	UFUNCTION(BlueprintCallable, Category = "Damage")
+	void SetBulletDamage(float NewDamage) { Damage = NewDamage; }
+
+	// Геттер для отладки
+	UFUNCTION(BlueprintPure, Category = "Damage")
+	float GetBulletDamage() const { return Damage; }
+
+	// === СЕТТЕРЫ ДЛЯ ПАРАМЕТРОВ ИЗ ТАБЛИЦЫ ===
+	UFUNCTION(BlueprintCallable, Category = "Setup")
+	void SetProjectileInfo(const FProjectileInfo& Info);
+
+	// Геттер урона
+	UFUNCTION(BlueprintPure, Category = "Damage")
+	float GetDamage() const { return Damage; }
+
+private:
+	// Функция создания декали
+	void SpawnBulletDecal(const FVector& Location, const FVector& Normal);
 };

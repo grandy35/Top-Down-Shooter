@@ -11,8 +11,8 @@
 #include "DrawDebugHelpers.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
-#include "Types.h"		
-#include "Weapon.generated.h" 
+#include "Types.h"
+
 
 struct FWeaponInfo;
 class UStaticMeshComponent;
@@ -20,6 +20,9 @@ class USceneComponent;
 class UParticleSystem;
 class USoundBase;
 class UMaterialInterface;
+class UAnimMontage;
+
+#include "Weapon.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnWeaponReloadStart, UAnimMontage*, Anim);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnWeaponReloadEnd);
@@ -164,6 +167,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	int32 GetWeaponRound();
 
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	UAnimMontage* GetReloadAnimation() const;
+	
+	UFUNCTION(BlueprintPure, Category = "Animation")
+	UAnimMontage* GetCurrentFireAnimation() const;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug")
 	bool ShowDebug = false;
 
@@ -179,11 +188,12 @@ private:
 	void PlayReloadSound();
 	void ApplyRecoil();
 	void FinishReload();
+	void DecreaseAmmo();
+	void SpawnBullet();
 
 	bool BlockFire = false;
 	// Таймер скорострельности
 	float LastFireTime;
-
-	
+	float ReloadTimeRemaining = 0.0f;
 
 };

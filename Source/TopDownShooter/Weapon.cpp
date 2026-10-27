@@ -94,16 +94,16 @@ void AWeapon::FireTick(float DeltaTime)
 
 void AWeapon::ReloadTick(float DeltaTime)
 {
-	if (bIsReloading)
+	if (!bIsReloading)
 	{
-		if (ReloadTime < 0.0f)
-		{
-			FinishReload();
-		}
-		else
-		{
-			ReloadTime -= DeltaTime;
-		}
+		return;
+	}
+
+	ReloadTimeRemaining -= DeltaTime;
+
+	if (ReloadTimeRemaining < 0.0f)
+	{
+		FinishReload();
 	}
 }
 
@@ -145,126 +145,21 @@ void AWeapon::Fire()
 		return;
 	}
 
+	//вынести в перем
 	float CurrentTime = GetWorld()->GetTimeSeconds();
-	if (CurrentTime - LastFireTime < (0.4f / FireRate))
+	bool test = CurrentTime - LastFireTime < (0.4f / FireRate);
+	if (test)
 	{
 		return;
 	}
 
-	CurrentAmmo--;
+	DecreaseAmmo();
 	LastFireTime = CurrentTime;
 
 	UE_LOG(LogTemp, Warning, TEXT("=== FIRE ==="));
 	UE_LOG(LogTemp, Warning, TEXT("Fire! Ammo: %d"), CurrentAmmo);
 
-	// Параметры спавна
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.Owner = this;
-	SpawnParams.Instigator = GetInstigator();
-	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-	// Загружаем класс Blueprint пули
-	UClass* BulletClass = LoadClass<AActor>(
-		nullptr,
-		TEXT("/Game/Weapons_Free/Meshes/Actors/Projectile/BP_Projectile.BP_Projectile_C")
-	);
-
-	if (!BulletClass)
-	{
-		UE_LOG(LogTemp, Error, TEXT("ERROR: BP_Projectile class not found!"));
-		return;
-	}
-
-	// 1. Получаем позицию дула
-	FVector MuzzleLoc = GetActorLocation() + (GetActorForwardVector() * 100.0f);
-
-	// 2. Получаем направление ОТ ПЕРСОНАЖА к курсору мыши
-	FVector LaunchDirection = FVector::ZeroVector;
-	APlayerController* PC = GetWorld()->GetFirstPlayerController();
-
-	if (PC)
-	{
-		// Получаем курсор мыши в мире
-		FHitResult HitResult;
-		bool bHit = PC->GetHitResultUnderCursor(ECC_Visibility, false, HitResult);
-
-		if (bHit && HitResult.bBlockingHit)
-		{
-			// Направление от дула к точке попадания курсора
-			LaunchDirection = HitResult.Location - MuzzleLoc;
-			LaunchDirection.Z = 0.0f; // Горизонтальный полёт
-			LaunchDirection.Normalize();
-
-			UE_LOG(LogTemp, Warning, TEXT("✓ Mouse Hit: %s"), *HitResult.Location.ToString());
-		}
-		else
-		{
-			// Если курсор ни во что не попал — используем направление вперёд
-			LaunchDirection = GetActorForwardVector();
-			LaunchDirection.Z = 0.0f;
-			LaunchDirection.Normalize();
-
-			UE_LOG(LogTemp, Warning, TEXT(" Mouse miss - using forward vector"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("✗ No PlayerController!"));
-		LaunchDirection = GetActorForwardVector();
-	}
-
-	UE_LOG(LogTemp, Warning, TEXT("LaunchDirection: %s"), *LaunchDirection.ToString());
-
-	// 3. Спавним пулю СРАЗУ в правильной позиции
-	FRotator LaunchRotation = LaunchDirection.Rotation();
-
-	AActor* BulletActor = GetWorld()->SpawnActor<AActor>(
-		BulletClass,
-		MuzzleLoc,
-		LaunchRotation,
-		SpawnParams
-	);
-
-	if (BulletActor)
-	{
-		UE_LOG(LogTemp, Warning, TEXT(" BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
-
-		// === ПЕРЕДАЁМ УРОН ИЗ ОРУЖИЯ В ПУЛЮ ===
-		AProjectileDefault* Bullet = Cast<AProjectileDefault>(BulletActor);
-		if (Bullet)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("=== FIRE DAMAGE DEBUG ==="));
-			UE_LOG(LogTemp, Warning, TEXT("Weapon Damage (this): %f"), Damage);
-			UE_LOG(LogTemp, Warning, TEXT("Setting bullet damage to: %f"), Damage);
-			Bullet->SetProjectileInfo(WeaponSetting.ProjectileSetting);
-			UE_LOG(LogTemp, Warning, TEXT("Bullet damage after set: %f"), Bullet->GetDamage());
-		}
-
-		// Пытаемся получить компонент движения
-		UProjectileMovementComponent* Movement =
-			BulletActor->FindComponentByClass<UProjectileMovementComponent>();
-
-		if (Movement)
-		{
-			Movement->Velocity = LaunchDirection * Movement->InitialSpeed;
-			UE_LOG(LogTemp, Warning, TEXT("✓ Velocity set: %s"), *Movement->Velocity.ToString());
-		}
-		else
-		{
-			UE_LOG(LogTemp, Error, TEXT("✗ No ProjectileMovementComponent found!"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("✗ Spawn failed!"));
-	}
-
-	// Эффекты
-	if (BulletActor)
-	{
-		SpawnMuzzleFlash();
-		PlayFireSound();
-	}
+	SpawnBullet();
 }
 
 void AWeapon::WeaponInit()
@@ -419,19 +314,11 @@ void AWeapon::Reloading()
 
 	// Начинаем перезарядку
 	bIsReloading = true;
-	UE_LOG(LogTemp, Warning, TEXT("Reloading started..."));
 
-	FTimerHandle ReloadTimerHandle;
-	GetWorldTimerManager().SetTimer(
-		ReloadTimerHandle,
-		this,
-		&AWeapon::FinishReload,
-		ReloadTime,
-		false
-	);
+	ReloadTimeRemaining = ReloadTime;
+	UE_LOG(LogTemp, Warning, TEXT("Reloading started"))
 
 	PlayReloadSound();
-	// Здесь можно добавить звук перезарядки и анимацию
 }
 
 bool AWeapon::CanFire() const
@@ -594,11 +481,145 @@ void AWeapon::FinishReload()
 {
 	CurrentAmmo = MaxAmmo;
 	bIsReloading = false;
+	ReloadTimeRemaining = 0.0f;
 
 	UE_LOG(LogTemp, Warning, TEXT("Reload complete! Ammo: %d"), CurrentAmmo);
 }
 
+void AWeapon::DecreaseAmmo()
+{
+	CurrentAmmo--;
+}
+
+void AWeapon::SpawnBullet()
+{
+	// Параметры спавна
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = GetInstigator();
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+	// Загружаем класс Blueprint пули
+	UClass* BulletClass = LoadClass<AActor>(
+		nullptr,
+		TEXT("/Game/Weapons_Free/Meshes/Actors/Projectile/BP_Projectile.BP_Projectile_C")
+	);
+
+	if (!BulletClass)
+	{
+		UE_LOG(LogTemp, Error, TEXT("ERROR: BP_Projectile class not found!"));
+		return;
+	}
+
+	// 1. Получаем позицию дула
+	FVector MuzzleLoc = GetActorLocation() + (GetActorForwardVector() * 100.0f);
+
+	// 2. Получаем направление ОТ ПЕРСОНАЖА к курсору мыши
+	FVector LaunchDirection = FVector::ZeroVector;
+	APlayerController* PC = GetWorld()->GetFirstPlayerController();
+
+	if (PC)
+	{
+		// Получаем курсор мыши в мире
+		FHitResult HitResult;
+		bool bHit = PC->GetHitResultUnderCursor(ECC_Visibility, false, HitResult);
+
+		if (bHit && HitResult.bBlockingHit)
+		{
+			// Направление от дула к точке попадания курсора
+			LaunchDirection = HitResult.Location - MuzzleLoc;
+			LaunchDirection.Z = 0.0f; // Горизонтальный полёт
+			LaunchDirection.Normalize();
+
+			UE_LOG(LogTemp, Warning, TEXT("✓ Mouse Hit: %s"), *HitResult.Location.ToString());
+		}
+		else
+		{
+			// Если курсор ни во что не попал — используем направление вперёд
+			LaunchDirection = GetActorForwardVector();
+			LaunchDirection.Z = 0.0f;
+			LaunchDirection.Normalize();
+
+			UE_LOG(LogTemp, Warning, TEXT(" Mouse miss - using forward vector"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("✗ No PlayerController!"));
+		LaunchDirection = GetActorForwardVector();
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("LaunchDirection: %s"), *LaunchDirection.ToString());
+
+	// 3. Спавним пулю СРАЗУ в правильной позиции
+	FRotator LaunchRotation = LaunchDirection.Rotation();
+
+	AActor* BulletActor = GetWorld()->SpawnActor<AActor>(
+		BulletClass,
+		MuzzleLoc,
+		LaunchRotation,
+		SpawnParams
+	);
+
+	if (BulletActor)
+	{
+		UE_LOG(LogTemp, Warning, TEXT(" BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
+
+		// === ПЕРЕДАЁМ УРОН ИЗ ОРУЖИЯ В ПУЛЮ ===
+		AProjectileDefault* Bullet = Cast<AProjectileDefault>(BulletActor);
+		if (Bullet)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("=== FIRE DAMAGE DEBUG ==="));
+			UE_LOG(LogTemp, Warning, TEXT("Weapon Damage (this): %f"), Damage);
+			UE_LOG(LogTemp, Warning, TEXT("Setting bullet damage to: %f"), Damage);
+			Bullet->SetProjectileInfo(WeaponSetting.ProjectileSetting);
+			UE_LOG(LogTemp, Warning, TEXT("Bullet damage after set: %f"), Bullet->GetDamage());
+		}
+
+		// Пытаемся получить компонент движения
+		UProjectileMovementComponent* Movement =
+			BulletActor->FindComponentByClass<UProjectileMovementComponent>();
+
+		if (Movement)
+		{
+			Movement->Velocity = LaunchDirection * Movement->InitialSpeed;
+			UE_LOG(LogTemp, Warning, TEXT("✓ Velocity set: %s"), *Movement->Velocity.ToString());
+		}
+		else
+		{
+			UE_LOG(LogTemp, Error, TEXT("✗ No ProjectileMovementComponent found!"));
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Error, TEXT("✗ Spawn failed!"));
+	}
+
+	if (BulletActor)
+	{
+		SpawnMuzzleFlash();
+		PlayFireSound();
+	}
+}
+
+
+UAnimMontage* AWeapon::GetReloadAnimation() const
+{
+	return WeaponSetting.AnimCharReload;
+}
+
+UAnimMontage* AWeapon::GetCurrentFireAnimation() const
+{
+	ATopDownShooterCharacter* Character = Cast<ATopDownShooterCharacter>(GetOwner());
+	if (Character && Character->AimEnabled && WeaponSetting.AnimCharAimFire)
+	{
+		return WeaponSetting.AnimCharAimFire;
+	}
+	return WeaponSetting.AnimCharFire;
+}
+
 void AWeapon::ApplyRecoil()
 {
+
 }
 

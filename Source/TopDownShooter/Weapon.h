@@ -47,6 +47,8 @@ public:
 	void FireTick(float DeltaTime);
 	void ReloadTick(float DeltaTime);
 	void DispersionTick(float DeltaTime);
+	void ClipDropTick(float DeltaTime);
+	void ShellDropTick(float DeltaTime);
 
 	void WeaponInit();
 
@@ -93,7 +95,8 @@ public:
 	UPROPERTY()
 	FWeaponInfo WeaponSetting;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Info")
-	FAddicionalWeaponInfo WeaponInfo;
+	FAddicionalWeaponInfo
+		WeaponInfo;
 
 	// === НАСТРОЙКИ ОРУЖИЯ ===
 
@@ -109,9 +112,7 @@ public:
 	// Текущий боезапас
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo")
 	int32 CurrentAmmo;
-	// Максимальный боезапас
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Ammo")
-	int32 MaxAmmo;
+	
 	// Флаг перезарядки
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
 	bool bIsReloading;
@@ -121,20 +122,12 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Weapon")
 	float ReloadTime;
 public:
-	// Эффект выстрела (частицы из дула)
-	UPROPERTY(EditAnywhere, Category = "Effects")
-	UParticleSystem* MuzzleFlashEffect;
 	// Эффект попадания в поверхность
 	UPROPERTY(EditAnywhere, Category = "Effects")
 	UParticleSystem* ImpactEffect;
-	// Звук выстрела
-	UPROPERTY(EditAnywhere, Category = "Effects")
-	USoundBase* FireSound;
 	// Звук попадания
 	UPROPERTY(EditAnywhere, Category = "Effects")
 	USoundBase* ImpactSound;
-	UPROPERTY(EditAnywhere, Category = "Effects")
-	USoundBase* ReloadSound;
 
 	//Dispersion
 	bool ShouldReduceDispersion = false;
@@ -164,6 +157,8 @@ public:
 	// Функция проверки, можно ли стрелять
 	UFUNCTION(BlueprintPure, Category = "Weapon")
 	bool CanFire() const;
+	UFUNCTION(BlueprintPure, Category = "Weapon")
+	bool IsReadyToFire() const;
 	UFUNCTION(BlueprintCallable)
 	int32 GetWeaponRound();
 
@@ -190,6 +185,15 @@ private:
 	void FinishReload();
 	void DecreaseAmmo();
 	void SpawnBullet();
+
+	bool DropClipFlag = false;
+	float DropClipTimer = -1.0f;
+
+	bool DropShellFlag = false;
+	float DropShellTimer = -1.0f;
+
+	UFUNCTION()
+	void InitDropMesh(UStaticMesh* DropMesh, FTransform Offset, FVector DropImpulseDirection, float LifeTimeMesh, float ImpulseRandomDispersion, float PowerImpulse, float CustomMass);
 
 	bool BlockFire = false;
 	// Таймер скорострельности

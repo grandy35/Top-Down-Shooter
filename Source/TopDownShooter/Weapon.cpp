@@ -3,11 +3,11 @@
 
 #include "Weapon.h"
 #include "Kismet/KismetMathLibrary.h"
-#include "Kismet/GameplayStatics.h"
 #include "Engine/World.h"
 #include "ProjectileDefault.h"
 #include "Types.h"
 #include "Particles/ParticleSystemComponent.h" 
+#include "Engine/StaticMeshActor.h"
 #include "TopDownShooterCharacter.h"
 
 
@@ -47,7 +47,6 @@ AWeapon::AWeapon()
 	FireRate = 5.0f; // 5 выстрелов в секунду
 	Range = 10000.0f;
 	CurrentAmmo = 30;
-	MaxAmmo = 30;
 	LastFireTime = 0.0f;
 	bIsReloading = false;
 	ReloadTime = 1.5f;
@@ -68,6 +67,8 @@ void AWeapon::Tick(float DeltaTime)
 	FireTick(DeltaTime);
 	ReloadTick(DeltaTime);
 	DispersionTick(DeltaTime);
+	ClipDropTick(DeltaTime);
+	ShellDropTick(DeltaTime);
 }
 
 void AWeapon::FireTick(float DeltaTime)
@@ -137,6 +138,34 @@ void AWeapon::DispersionTick(float DeltaTime)
 		UE_LOG(LogTemp, Warning, TEXT("Dispersion: MAX = %f. MIN = %f. Current = %f"), CurrentDispersionMax, CurrentDispersionMin, CurrentDispersion);
 }
 
+void AWeapon::ClipDropTick(float DeltaTime)
+{
+	if (DropClipFlag)
+	{
+		if (DropClipTimer < 0.0f)
+		{
+			DropClipFlag = false;
+			InitDropMesh(WeaponSetting.ClipDropMesh.DropMesh, WeaponSetting.ClipDropMesh.DropMeshOffset, WeaponSetting.ClipDropMesh.DropMeshImpulseDir, WeaponSetting.ClipDropMesh.DropMeshLifeTime, WeaponSetting.ClipDropMesh.ImpulseRandomDispersion, WeaponSetting.ClipDropMesh.PowerImpulse, WeaponSetting.ClipDropMesh.CustomMass);
+		}
+		else
+			DropClipTimer -= DeltaTime;
+	}
+}
+
+void AWeapon::ShellDropTick(float DeltaTime)
+{
+	if (DropShellFlag)
+	{
+		if (DropShellTimer < 0.0f)
+		{
+			DropShellFlag = false;
+			InitDropMesh(WeaponSetting.ShellBullets.DropMesh, WeaponSetting.ShellBullets.DropMeshOffset, WeaponSetting.ShellBullets.DropMeshImpulseDir, WeaponSetting.ShellBullets.DropMeshLifeTime, WeaponSetting.ShellBullets.ImpulseRandomDispersion, WeaponSetting.ShellBullets.PowerImpulse, WeaponSetting.ShellBullets.CustomMass);
+		}
+		else
+			DropShellTimer -= DeltaTime;
+	}
+}
+
 void AWeapon::Fire()
 {
 	if (!CanFire())
@@ -147,10 +176,23 @@ void AWeapon::Fire()
 
 	//вынести в перем
 	float CurrentTime = GetWorld()->GetTimeSeconds();
-	bool test = CurrentTime - LastFireTime < (0.4f / FireRate);
-	if (test)
+	bool ReadyToFire = CurrentTime - LastFireTime < (0.4f / WeaponSetting.RateOfFire);
+	if (ReadyToFire)
 	{
 		return;
+	}
+
+	if (WeaponSetting.ShellBullets.DropMesh)
+	{
+		if (WeaponSetting.ShellBullets.DropMeshTime < 0.0f)
+		{
+			InitDropMesh(WeaponSetting.ShellBullets.DropMesh, WeaponSetting.ShellBullets.DropMeshOffset, WeaponSetting.ShellBullets.DropMeshImpulseDir, WeaponSetting.ShellBullets.DropMeshLifeTime, WeaponSetting.ShellBullets.ImpulseRandomDispersion, WeaponSetting.ShellBullets.PowerImpulse, WeaponSetting.ShellBullets.CustomMass);
+		}
+		else
+		{
+			DropShellFlag = true;
+			DropShellTimer = WeaponSetting.ShellBullets.DropMeshTime;
+		}
 	}
 
 	DecreaseAmmo();
@@ -306,7 +348,7 @@ void AWeapon::Reloading()
 	}
 
 	// Проверяем, есть ли смысл перезаряжаться
-	if (CurrentAmmo >= MaxAmmo)
+	if (CurrentAmmo >= WeaponSetting.MaxRound)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("Ammo is full!"));
 		return;
@@ -316,7 +358,13 @@ void AWeapon::Reloading()
 	bIsReloading = true;
 
 	ReloadTimeRemaining = ReloadTime;
-	UE_LOG(LogTemp, Warning, TEXT("Reloading started"))
+	UE_LOG(LogTemp, Warning, TEXT("Reloading started"));
+
+	if (WeaponSetting.ClipDropMesh.DropMesh)
+	{
+		DropClipFlag = true;
+		DropClipTimer = WeaponSetting.ClipDropMesh.DropMeshTime;
+	}
 
 	PlayReloadSound();
 }
@@ -324,6 +372,20 @@ void AWeapon::Reloading()
 bool AWeapon::CanFire() const
 {
 	return CurrentAmmo > 0 && !bIsReloading;
+}
+
+bool AWeapon::IsReadyToFire() const
+{
+	// Проверяем кулдаун
+	float CurrentTime = GetWorld()->GetTimeSeconds();
+	float FireDelay = 0.4f / WeaponSetting.RateOfFire;
+	bool ReadyToFire = CurrentTime - LastFireTime < FireDelay;
+
+	if (ReadyToFire)
+	{
+		return false;  // Кулдаун не прошёл
+	}
+	return true;
 }
 
 // === ТРАССИРОВКА (LINE TRACE) ===
@@ -390,11 +452,11 @@ void AWeapon::PerformLineTrace(const FVector& Start, const FVector& End)
 // === ЭФФЕКТ ВЫСТРЕЛА (ВСПЫШКА ИЗ ДУЛА) ===
 void AWeapon::SpawnMuzzleFlash()
 {
-	if (MuzzleFlashEffect && MuzzleSocket)
+	if (WeaponSetting.EffectfireWeapon && MuzzleSocket)
 	{
 		UParticleSystemComponent* PSC = UGameplayStatics::SpawnEmitterAtLocation(
 			GetWorld(),
-			MuzzleFlashEffect,
+			WeaponSetting.EffectfireWeapon,
 			MuzzleSocket->GetComponentLocation(),
 			MuzzleSocket->GetComponentRotation(),
 			FVector(1.0f)
@@ -455,11 +517,11 @@ void AWeapon::SpawnImpactEffects(const FVector& Location, const FVector& Normal)
 // === ЗВУК ВЫСТРЕЛА ===
 void AWeapon::PlayFireSound()
 {
-	if (FireSound)
+	if (WeaponSetting.SoundFireWeapon)
 	{
 		UGameplayStatics::PlaySoundAtLocation(
 			GetWorld(),
-			FireSound,
+			WeaponSetting.SoundFireWeapon,
 			GetActorLocation()
 		);
 	}
@@ -467,11 +529,11 @@ void AWeapon::PlayFireSound()
 
 void AWeapon::PlayReloadSound()
 {
-	if (ReloadSound)
+	if (WeaponSetting.SoundReloadWeapon)
 	{
 		UGameplayStatics::PlaySoundAtLocation(
 			GetWorld(),
-			ReloadSound,
+			WeaponSetting.SoundReloadWeapon,
 			GetActorLocation()
 		);
 	};
@@ -479,7 +541,7 @@ void AWeapon::PlayReloadSound()
 
 void AWeapon::FinishReload()
 {
-	CurrentAmmo = MaxAmmo;
+	CurrentAmmo = WeaponSetting.MaxRound;
 	bIsReloading = false;
 	ReloadTimeRemaining = 0.0f;
 
@@ -488,7 +550,7 @@ void AWeapon::FinishReload()
 
 void AWeapon::DecreaseAmmo()
 {
-	CurrentAmmo--;
+	CurrentAmmo -= GetNumberProjectileByShot();
 }
 
 void AWeapon::SpawnBullet()
@@ -552,56 +614,153 @@ void AWeapon::SpawnBullet()
 	UE_LOG(LogTemp, Warning, TEXT("LaunchDirection: %s"), *LaunchDirection.ToString());
 
 	// 3. Спавним пулю СРАЗУ в правильной позиции
-	FRotator LaunchRotation = LaunchDirection.Rotation();
+	int32 NumProjectiles = GetNumberProjectileByShot();  // из таблицы (для дробовика = 8-12)
 
-	AActor* BulletActor = GetWorld()->SpawnActor<AActor>(
-		BulletClass,
-		MuzzleLoc,
-		LaunchRotation,
-		SpawnParams
-	);
+	UE_LOG(LogTemp, Warning, TEXT("Spawning %d projectiles with dispersion"), NumProjectiles);
 
-	if (BulletActor)
+	for (int32 i = 0; i < NumProjectiles; i++)
 	{
-		UE_LOG(LogTemp, Warning, TEXT(" BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
+		// Применяем разброс к направлению для каждой пули
+		LaunchDirection = ApplyDispersionToShoot(LaunchDirection);
+		FRotator LaunchRotation = LaunchDirection.Rotation();
 
-		// === ПЕРЕДАЁМ УРОН ИЗ ОРУЖИЯ В ПУЛЮ ===
-		AProjectileDefault* Bullet = Cast<AProjectileDefault>(BulletActor);
-		if (Bullet)
+		AActor* BulletActor;
+		BulletActor = GetWorld()->SpawnActor<AActor>(
+			BulletClass,
+			MuzzleLoc,
+			LaunchRotation,
+			SpawnParams
+		);
+
+		if (BulletActor)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("=== FIRE DAMAGE DEBUG ==="));
-			UE_LOG(LogTemp, Warning, TEXT("Weapon Damage (this): %f"), Damage);
-			UE_LOG(LogTemp, Warning, TEXT("Setting bullet damage to: %f"), Damage);
-			Bullet->SetProjectileInfo(WeaponSetting.ProjectileSetting);
-			UE_LOG(LogTemp, Warning, TEXT("Bullet damage after set: %f"), Bullet->GetDamage());
-		}
+			UE_LOG(LogTemp, Warning, TEXT(" BULLET SPAWNED at: %s"), *MuzzleLoc.ToString());
 
-		// Пытаемся получить компонент движения
-		UProjectileMovementComponent* Movement =
-			BulletActor->FindComponentByClass<UProjectileMovementComponent>();
+			// === ПЕРЕДАЁМ УРОН ИЗ ОРУЖИЯ В ПУЛЮ ===
+			AProjectileDefault* Bullet = Cast<AProjectileDefault>(BulletActor);
+			if (Bullet)
+			{
+				Bullet->SetProjectileInfo(WeaponSetting.ProjectileSetting);
+				UE_LOG(LogTemp, Warning, TEXT("Bullet damage after set: %f"), Bullet->GetDamage());
+			}
 
-		if (Movement)
-		{
-			Movement->Velocity = LaunchDirection * Movement->InitialSpeed;
-			UE_LOG(LogTemp, Warning, TEXT("✓ Velocity set: %s"), *Movement->Velocity.ToString());
+			// Пытаемся получить компонент движения
+			UProjectileMovementComponent* Movement =
+				BulletActor->FindComponentByClass<UProjectileMovementComponent>();
+
+			if (Movement)
+			{
+				Movement->Velocity = LaunchDirection * Movement->InitialSpeed;
+				UE_LOG(LogTemp, Warning, TEXT("✓ Velocity set: %s"), *Movement->Velocity.ToString());
+			}
+			else
+			{
+				UE_LOG(LogTemp, Error, TEXT("✗ No ProjectileMovementComponent found!"));
+			}
 		}
 		else
 		{
-			UE_LOG(LogTemp, Error, TEXT("✗ No ProjectileMovementComponent found!"));
+			UE_LOG(LogTemp, Error, TEXT("✗ Spawn failed!"));
 		}
 	}
-	else
-	{
-		UE_LOG(LogTemp, Error, TEXT("✗ Spawn failed!"));
-	}
 
-	if (BulletActor)
-	{
-		SpawnMuzzleFlash();
-		PlayFireSound();
-	}
+	SpawnMuzzleFlash();
+	PlayFireSound();
 }
 
+void AWeapon::InitDropMesh(UStaticMesh* DropMesh, FTransform Offset, FVector DropImpulseDirection, float LifeTimeMesh, float ImpulseRandomDispersion, float PowerImpulse, float CustomMass)
+{
+	if (DropMesh)
+	{
+		FTransform Transform;
+
+		FVector LocalDir = this->GetActorForwardVector() * Offset.GetLocation().X +
+			this->GetActorRightVector() * Offset.GetLocation().Y +
+			this->GetActorUpVector() * Offset.GetLocation().Z;
+
+		Transform.SetLocation(GetActorLocation() + LocalDir);
+		Transform.SetScale3D(Offset.GetScale3D());
+
+		Transform.SetRotation((GetActorRotation() + Offset.Rotator()).Quaternion());
+		AStaticMeshActor* NewActor = nullptr;
+
+		FActorSpawnParameters Param;
+		Param.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+		Param.Owner = this;
+		NewActor = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform, Param);
+
+		if (NewActor && NewActor->GetStaticMeshComponent())
+		{
+			NewActor->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("IgnoreOnlyPawn"));
+			NewActor->GetStaticMeshComponent()->SetCollisionEnabled(ECollisionEnabled::PhysicsOnly);
+
+			//set parameter for new actor
+			NewActor->SetActorTickEnabled(false);
+
+			NewActor->GetStaticMeshComponent()->Mobility = EComponentMobility::Movable;
+			NewActor->GetStaticMeshComponent()->SetSimulatePhysics(true);
+			NewActor->GetStaticMeshComponent()->SetStaticMesh(DropMesh);
+			//NewActor->GetStaticMeshComponent()->SetCollisionObjectType()
+
+
+
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECollisionResponse::ECR_Ignore);
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel2, ECollisionResponse::ECR_Ignore);
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_Pawn, ECollisionResponse::ECR_Ignore);
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_WorldStatic, ECollisionResponse::ECR_Block);
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_WorldDynamic, ECollisionResponse::ECR_Block);
+			NewActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_PhysicsBody, ECollisionResponse::ECR_Block);
+
+
+
+			if (CustomMass > 0.0f)
+			{
+				NewActor->GetStaticMeshComponent()->SetMassOverrideInKg(NAME_None, CustomMass, true);
+			}
+
+			if (!DropImpulseDirection.IsNearlyZero())
+			{
+				FVector FinalDir;
+				LocalDir = LocalDir + (DropImpulseDirection * 1000.0f);
+
+				if (!FMath::IsNearlyZero(ImpulseRandomDispersion))
+					FinalDir += UKismetMathLibrary::RandomUnitVectorInConeInDegrees(LocalDir, ImpulseRandomDispersion);
+				FinalDir.GetSafeNormal(0.0001f);
+
+				NewActor->GetStaticMeshComponent()->AddImpulse(FinalDir * PowerImpulse);
+			}
+
+			// === УСТАНОВКА ВРЕМЕНИ ЖИЗНИ ===
+			if (LifeTimeMesh > 0.0f)
+			{
+				// Способ 1: InitialLifeSpan (может не работать с физикой)
+				NewActor->InitialLifeSpan = LifeTimeMesh;
+
+				// Способ 2: Явный таймер (надёжнее)
+				FTimerHandle DestroyTimer;
+				GetWorldTimerManager().SetTimer(
+					DestroyTimer,
+					[NewActor]()
+					{
+						if (NewActor && NewActor->IsValidLowLevel())
+						{
+							NewActor->Destroy();
+							UE_LOG(LogTemp, Warning, TEXT("✓ Shell bullet destroyed"));
+						}
+					},
+					LifeTimeMesh,
+					false
+				);
+
+				UE_LOG(LogTemp, Warning, TEXT("✓ Shell bullet spawned, lifetime: %.1f"), LifeTimeMesh);
+			}
+			else
+			{
+				UE_LOG(LogTemp, Warning, TEXT("⚠ LifeTimeMesh = 0, shell will not disappear!"));
+			}
+		}
+	}
+}
 
 UAnimMontage* AWeapon::GetReloadAnimation() const
 {

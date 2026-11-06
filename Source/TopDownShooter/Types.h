@@ -102,23 +102,46 @@ struct FWeaponDispersion
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
 	float AimWalk_StateDispersionReduction = 0.4f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Walk_StateDispersionAimMax = 5.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Walk_StateDispersionAimMin = 1.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Walk_StateDispersionAimRecoil = 1.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Walk_StateDispersionReduction = 0.2f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Run_StateDispersionAimMax = 10.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Run_StateDispersionAimMin = 4.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Run_StateDispersionAimRecoil = 1.0f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion ")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Dispersion")
 	float Run_StateDispersionReduction = 0.1f;
+};
+
+USTRUCT(BlueprintType)
+struct FDropMeshInfo
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	UStaticMesh* DropMesh = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	float DropMeshTime = -1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	float DropMeshLifeTime = 5.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	FTransform DropMeshOffset = FTransform();
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	FVector DropMeshImpulseDir = FVector(0.0f);
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	float PowerImpulse = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	float ImpulseRandomDispersion = 0.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "DropMesh")
+	float CustomMass = 0.0f;
 };
 
 USTRUCT(BlueprintType)
@@ -165,10 +188,9 @@ struct FWeaponInfo : public FTableRowBase
 	UAnimMontage* AnimCharReload = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh")
-	UStaticMesh* MagazineDrop = nullptr;
+	FDropMeshInfo ClipDropMesh;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Mesh")
-	UStaticMesh* ShellBullets = nullptr;
-
+	FDropMeshInfo ShellBullets;
 };
 
 USTRUCT(BlueprintType)

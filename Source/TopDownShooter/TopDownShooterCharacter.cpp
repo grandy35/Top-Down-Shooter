@@ -13,6 +13,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Engine/World.h"
+#include "TDSGameInstance.h"
+#include "Weapon.h"
 
 ATopDownShooterCharacter::ATopDownShooterCharacter()
 {
@@ -59,6 +61,13 @@ ATopDownShooterCharacter::ATopDownShooterCharacter()
 	PrimaryActorTick.bStartWithTickEnabled = true;
 }
 
+void ATopDownShooterCharacter::BeginPlay()
+{
+	Super::BeginPlay();
+
+	InitWeapon(InitWeaponName);
+}
+
 void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
@@ -103,9 +112,6 @@ void ATopDownShooterCharacter::Tick(float DeltaSeconds)
 	{
 		IncreaseStamina(DeltaSeconds);
 	}
-
-	//FString temp = StaticEnum<EMovementState>()->GetEnumNameStringByValue((int64)MovementState);
-	//UE_LOG(LogTemp, Warning, TEXT("%s"), *temp);
 }
 
 void ATopDownShooterCharacter::SetupPlayerInputComponent(UInputComponent* NewInputComponent)
@@ -142,6 +148,18 @@ void ATopDownShooterCharacter::MovementTick(float DeltaTime)
 	}
 }
 
+void ATopDownShooterCharacter::AttackCharEvent(bool bIsFiring)
+{
+	AWeapon* myWeapon = nullptr;
+	myWeapon = GetCurrentWeapon();
+	if (myWeapon)
+	{
+		//ToDo Check melee or range
+		myWeapon->SetWeaponStateFire(bIsFiring);
+	}
+	else
+		UE_LOG(LogTemp, Warning, TEXT("ATPSCharacter::AttackCharEvent - CurrentWeapon -NULL"));
+}
 
 void ATopDownShooterCharacter::CharacterUpdate()
 {
@@ -172,28 +190,44 @@ void ATopDownShooterCharacter::CharacterUpdate()
 
 void ATopDownShooterCharacter::ChangeMovementState()
 {
-	if (SprintRunEnabled && !AimEnabled)
-	{
-		MovementState = EMovementState::SprintRun;
-	}
-	else if (WalkEnabled && AimEnabled)
-	{
-		MovementState = EMovementState::AimWalk;
-	}
-	else if (WalkEnabled)
-	{
-		MovementState = EMovementState::Walk;
-	}
-	else if (AimEnabled)
-	{
-		MovementState = EMovementState::Aim;
-	}
-	else
+	if (!WalkEnabled && !SprintRunEnabled && !AimEnabled)
 	{
 		MovementState = EMovementState::Run;
 	}
-
+	else
+	{
+		if (SprintRunEnabled)
+		{
+			WalkEnabled = false;
+			AimEnabled = false;
+			MovementState = EMovementState::SprintRun;
+		}
+		if (WalkEnabled && !SprintRunEnabled && AimEnabled)
+		{
+			MovementState = EMovementState::AimWalk;
+		}
+		else
+		{
+			if (WalkEnabled && !SprintRunEnabled && !AimEnabled)
+			{
+				MovementState = EMovementState::Walk;
+			}
+			else
+			{
+				if (!WalkEnabled && !SprintRunEnabled && AimEnabled)
+				{
+					MovementState = EMovementState::Aim;
+				}
+			}
+		}
+	}
 	CharacterUpdate();
+
+	AWeapon* MyWeapon = GetCurrentWeapon();
+	if (MyWeapon)
+	{
+		MyWeapon->UpdateStateWeapon(MovementState);
+	}
 }
 
 void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
@@ -208,7 +242,6 @@ void ATopDownShooterCharacter::DecreaseStamina(float DeltaSeconds)
 			StopSprint();
 		}
 	}
-	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
@@ -219,7 +252,6 @@ void ATopDownShooterCharacter::IncreaseStamina(float DeltaSeconds)
 	{
 		FullStamina = 100.0f;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("%f"), FullStamina);
 }
 
 void ATopDownShooterCharacter::StopSprint()
@@ -248,4 +280,71 @@ void ATopDownShooterCharacter::CompareVectors(AActor* Actor)
 	{
 		StopSprint();
 	}
+}
+
+AWeapon* ATopDownShooterCharacter::GetCurrentWeapon()
+{
+	return CurrentWeapon;
+}
+
+void ATopDownShooterCharacter::InitWeapon(FName IdWeapon)
+{
+	UTDSGameInstance* MyGI = Cast<UTDSGameInstance>(GetGameInstance());
+
+	if (!MyGI)
+	{
+		//UE_LOG(LogTemp, Error, TEXT("GameInstance is NULL!"));
+		return;
+	}
+
+	FWeaponInfo MyWeaponInfo;
+
+	if (!MyGI->GetWeaponInfoByName(IdWeapon, MyWeaponInfo))
+	{
+		//UE_LOG(LogTemp, Error, TEXT("Weapon not found in table: %s"), *IdWeapon.ToString());
+		return;
+	}
+
+	if (!MyWeaponInfo.WeaponClass)
+	{
+		//UE_LOG(LogTemp, Error, TEXT("WeaponClass is NULL for: %s"), *IdWeapon.ToString());
+		return;
+	}
+
+	if (MyGI)
+	{
+		if (MyGI->GetWeaponInfoByName(IdWeapon, MyWeaponInfo))
+		{
+			if (MyWeaponInfo.WeaponClass)
+			{
+				FVector SpawnLocation = FVector::ZeroVector;
+				FRotator SpawnRotation = FRotator::ZeroRotator;
+
+				FActorSpawnParameters SpawnParams;
+				SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				SpawnParams.Owner = this;
+				SpawnParams.Instigator = this;
+
+				AWeapon* MyWeapon = Cast<AWeapon>(GetWorld()->SpawnActor(MyWeaponInfo.WeaponClass, &SpawnLocation, &SpawnRotation, SpawnParams));
+				if (MyWeapon)
+				{
+					FAttachmentTransformRules Rule(EAttachmentRule::SnapToTarget, false);
+					MyWeapon->AttachToComponent(GetMesh(), Rule, FName("Weapon_Socket"));
+					CurrentWeapon = MyWeapon;
+
+					MyWeapon->WeaponSetting = MyWeaponInfo;
+					MyWeapon->WeaponInfo.Round = MyWeaponInfo.MaxRound;
+					MyWeapon->Damage = MyWeaponInfo.WeaponDamage;
+					UE_LOG(LogTemp, Warning, TEXT("=== INIT WEAPON ==="));
+					UE_LOG(LogTemp, Warning, TEXT("WeaponDamage from DataTable: %f"), MyWeaponInfo.WeaponDamage);
+					UE_LOG(LogTemp, Warning, TEXT("Weapon Damage after set: %f"), MyWeapon->Damage);
+				}
+			}
+		}
+		else
+		{
+			//UE_LOG(LogTemp, Warning, TEXT("Weapon not found in table!!!"));
+		}
+	}
+
 }
